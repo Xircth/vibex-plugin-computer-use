@@ -124,8 +124,9 @@ pub mod binary_cache {
 
     /// Base directory for cached binaries (`cua-driver`, etc.).
     pub fn cache_base_dir() -> Result<PathBuf, AcpError> {
-        let cache = dirs::cache_dir()
-            .ok_or_else(|| AcpError::DownloadFailed("Cannot determine system cache directory".into()))?;
+        let cache = dirs::cache_dir().ok_or_else(|| {
+            AcpError::DownloadFailed("Cannot determine system cache directory".into())
+        })?;
         Ok(cache.join("vibex").join("acp-binaries"))
     }
 
@@ -137,7 +138,11 @@ pub mod binary_cache {
         }
     }
 
-    pub fn expected_tool_binary_path(id: &str, version: &str, cmd: &str) -> Result<PathBuf, AcpError> {
+    pub fn expected_tool_binary_path(
+        id: &str,
+        version: &str,
+        cmd: &str,
+    ) -> Result<PathBuf, AcpError> {
         Ok(cache_base_dir()?
             .join(id)
             .join(version)
@@ -232,9 +237,8 @@ pub mod binary_cache {
         let parent = dest
             .parent()
             .ok_or_else(|| AcpError::DownloadFailed("Invalid cache path".into()))?;
-        std::fs::create_dir_all(parent).map_err(|e| {
-            AcpError::DownloadFailed(format!("Failed to create cache dir: {e}"))
-        })?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| AcpError::DownloadFailed(format!("Failed to create cache dir: {e}")))?;
 
         on_progress("Extracting archive...");
         let bin_name = binary_file_name(cmd);
@@ -296,8 +300,8 @@ pub mod binary_cache {
         let mut last_reported_mb: u64 = 0;
 
         while let Some(chunk) = stream.next().await {
-            let chunk =
-                chunk.map_err(|e| AcpError::DownloadFailed(format!("Failed to read response: {e}")))?;
+            let chunk = chunk
+                .map_err(|e| AcpError::DownloadFailed(format!("Failed to read response: {e}")))?;
             downloaded += chunk.len() as u64;
             bytes.extend_from_slice(&chunk);
 
@@ -345,14 +349,12 @@ pub mod binary_cache {
             let Some(enclosed) = file.enclosed_name() else {
                 continue;
             };
-            let file_name = enclosed
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let file_name = enclosed.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if file_name == bin_name && !file.is_dir() {
                 let mut buf = Vec::new();
-                file.read_to_end(&mut buf)
-                    .map_err(|e| AcpError::DownloadFailed(format!("Failed to read zip entry: {e}")))?;
+                file.read_to_end(&mut buf).map_err(|e| {
+                    AcpError::DownloadFailed(format!("Failed to read zip entry: {e}"))
+                })?;
                 write_binary_atomic(dest, &buf)?;
                 return Ok(());
             }
@@ -380,9 +382,9 @@ pub mod binary_cache {
             let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if file_name == bin_name && entry.header().entry_type().is_file() {
                 let mut buf = Vec::new();
-                entry
-                    .read_to_end(&mut buf)
-                    .map_err(|e| AcpError::DownloadFailed(format!("Failed to read tar entry: {e}")))?;
+                entry.read_to_end(&mut buf).map_err(|e| {
+                    AcpError::DownloadFailed(format!("Failed to read tar entry: {e}"))
+                })?;
                 write_binary_atomic(dest, &buf)?;
                 return Ok(());
             }
@@ -397,12 +399,14 @@ pub mod binary_cache {
             .parent()
             .ok_or_else(|| AcpError::DownloadFailed("Invalid destination path".into()))?;
         let tmp = parent.join(format!(".tmp-{}", uuid::Uuid::new_v4()));
-        std::fs::write(&tmp, data).map_err(|e| {
-            AcpError::DownloadFailed(format!("Failed to write temp file: {e}"))
-        })?;
+        std::fs::write(&tmp, data)
+            .map_err(|e| AcpError::DownloadFailed(format!("Failed to write temp file: {e}")))?;
         std::fs::rename(&tmp, dest).map_err(|e| {
             let _ = std::fs::remove_file(&tmp);
-            AcpError::DownloadFailed(format!("Failed to rename temp file to {}: {e}", dest.display()))
+            AcpError::DownloadFailed(format!(
+                "Failed to rename temp file to {}: {e}",
+                dest.display()
+            ))
         })?;
         Ok(())
     }
@@ -497,10 +501,16 @@ pub mod event_bridge {
             }
         }
 
-        pub fn send(&self, channel: &str, payload: &impl Serialize) -> Option<Arc<serde_json::Value>> {
+        pub fn send(
+            &self,
+            channel: &str,
+            payload: &impl Serialize,
+        ) -> Option<Arc<serde_json::Value>> {
             let value = Arc::new(serde_json::to_value(payload).ok()?);
             if channel == AGENT_ACTIVITY_EVENT {
-                if let Ok(activity) = serde_json::from_value::<ComputerActivityPayload>((*value).clone()) {
+                if let Ok(activity) =
+                    serde_json::from_value::<ComputerActivityPayload>((*value).clone())
+                {
                     let mut hist = self
                         .activity_history
                         .lock()

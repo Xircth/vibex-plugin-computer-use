@@ -4,6 +4,8 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import ComputerUseSettingsView, {
+  catalogItems,
+  resolveBrokerSurface,
   type ComputerStatus,
   type ComputerToolsSettings,
   type DriverInfo,
@@ -243,7 +245,8 @@ describe('ComputerUseSettingsView with live vibex-computer-helper daemon payload
     ) as HTMLElement[];
     expect(rowLabels.length).toBeGreaterThanOrEqual(3);
     for (const lbl of rowLabels) {
-      expect(lbl.style.fontSize).toBe('12px');
+      expect(lbl.className).toContain('text-sm');
+      expect(lbl.style.fontSize).toBe('');
     }
 
     await act(async () => {
@@ -435,6 +438,67 @@ describe('ComputerUseSettingsView with live vibex-computer-helper daemon payload
       container.remove();
       await worker.dispose();
     }
+  });
+});
+
+describe('status popover Worker broker', () => {
+  const pluginId = 'vibex-plugin-computer-use';
+
+  it('reads catalog items from the host object or a bare array', () => {
+    expect(
+      catalogItems({
+        generation: 4,
+        items: [{ pluginId, id: 'computer-use', kind: 'settings_page', generation: 4 }],
+      })
+    ).toEqual([
+      { pluginId, id: 'computer-use', kind: 'settings_page', generation: 4 },
+    ]);
+    expect(
+      catalogItems([{ pluginId, id: 'computer-use', kind: 'settings_page', generation: 2 }])
+    ).toHaveLength(1);
+    expect(catalogItems(null)).toEqual([]);
+    expect(catalogItems({ items: 'nope' })).toEqual([]);
+  });
+
+  it('binds a status id to the sibling settings page and its generation', () => {
+    const broker = resolveBrokerSurface(
+      [
+        { pluginId, id: 'computer-use-status', kind: 'status', generation: 1 },
+        { pluginId: 'other', id: 'computer-use', kind: 'settings_page', generation: 9 },
+        { pluginId, id: 'console', kind: 'app_tab', generation: 3 },
+        { pluginId, id: 'computer-use', kind: 'settings_page', generation: 6 },
+      ],
+      pluginId,
+      'computer-use-status'
+    );
+    expect(broker).toEqual({ id: 'computer-use', generation: 6 });
+  });
+
+  it('keeps an id that is already an openable surface', () => {
+    expect(
+      resolveBrokerSurface(
+        [
+          { pluginId, id: 'computer-use', kind: 'settings_page', generation: 8 },
+          { pluginId, id: 'older', kind: 'app_panel', generation: 2 },
+        ],
+        pluginId,
+        'computer-use'
+      )
+    ).toEqual({ id: 'computer-use', generation: 8 });
+  });
+
+  it('falls back to the requested id when the plugin has no openable surface', () => {
+    expect(
+      resolveBrokerSurface(
+        [{ pluginId, id: 'computer-use-status', kind: 'status', generation: 5 }],
+        pluginId,
+        'computer-use-status'
+      )
+    ).toEqual({ id: 'computer-use-status', generation: 5 });
+    expect(resolveBrokerSurface([], pluginId, 'computer-use-status')).toEqual({
+      id: 'computer-use-status',
+      generation: 1,
+    });
   });
 });
 

@@ -1468,6 +1468,27 @@ impl TargetTable {
         out
     }
 
+    /// Handles of windows that currently have a grant and are on screen.
+    /// On Windows the handle is the HWND the driver stored as `window_id`.
+    pub fn shared_handles(&self) -> Vec<u64> {
+        let inner = self.lock();
+        let mut out: Vec<u64> = inner
+            .entries
+            .values()
+            .filter(|entry| {
+                entry.grant.is_some()
+                    && !entry.gone
+                    && entry.on_screen
+                    && entry.minimized != Some(true)
+                    && entry.identity.window_id != 0
+            })
+            .map(|entry| entry.identity.window_id)
+            .collect();
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// Every application shared as a whole, oldest share first.
     pub fn shared_apps(&self) -> Vec<SharedApp> {
         let inner = self.lock();
@@ -2998,7 +3019,11 @@ mod tests {
                 repeat: 1,
             },
         ] {
-            assert_eq!(act(&table, &id, &writes), Err(ActDenied::Secret), "{writes:?}");
+            assert_eq!(
+                act(&table, &id, &writes),
+                Err(ActDenied::Secret),
+                "{writes:?}"
+            );
         }
     }
 
@@ -3330,7 +3355,11 @@ mod tests {
             Err(ActDenied::ChordBeyond)
         );
         assert_eq!(
-            act(&table, &id, &key(Key::Char('x'), Modifiers::default(), None)),
+            act(
+                &table,
+                &id,
+                &key(Key::Char('x'), Modifiers::default(), None)
+            ),
             Err(ActDenied::NeedsElement)
         );
         let field = ElementTarget {

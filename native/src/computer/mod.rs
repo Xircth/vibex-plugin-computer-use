@@ -95,6 +95,7 @@ pub mod tcc;
 // it runs on (`VIBEX_COMPUTER_USE`).
 pub mod driver_admin;
 pub mod events;
+pub mod glow;
 #[cfg(target_os = "macos")]
 pub mod helper_app;
 pub mod local;

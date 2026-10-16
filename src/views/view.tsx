@@ -7,6 +7,8 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import appCss from '../../runtime/app.css?inline';
+import { retainStyle } from '../styles/retainStyles';
 
 // ============================================================================
 // Types matching vibex-computer-helper daemon RPC responses (service.rs)
@@ -337,6 +339,70 @@ const DEFAULT_BLOCK_LABELS: Record<string, string> = {
   passwords: '密码 (Passwords)',
 };
 
+const OPEN_BROKER_KINDS = new Set([
+  'settings_page',
+  'app_tab',
+  'app_panel',
+  'kanban_view',
+  'app_surface',
+]);
+
+type BrokerCatalogItem = {
+  pluginId?: string;
+  id?: string;
+  kind?: string;
+  generation?: number;
+};
+
+export function catalogItems(catalog: unknown): BrokerCatalogItem[] {
+  if (Array.isArray(catalog)) return catalog as BrokerCatalogItem[];
+  if (
+    catalog &&
+    typeof catalog === 'object' &&
+    Array.isArray((catalog as { items?: unknown }).items)
+  ) {
+    return (catalog as { items: BrokerCatalogItem[] }).items;
+  }
+  return [];
+}
+
+/** Status popovers are not App surfaces. Bind their Worker calls to the
+ *  plugin's settings page (or another openable surface) instead. */
+export function resolveBrokerSurface(
+  items: BrokerCatalogItem[],
+  pluginId: string,
+  requestedId: string
+): { id: string; generation: number } {
+  const own = items.find(
+    (item) => item.pluginId === pluginId && item.id === requestedId
+  );
+  if (
+    own &&
+    typeof own.kind === 'string' &&
+    OPEN_BROKER_KINDS.has(own.kind) &&
+    typeof own.generation === 'number'
+  ) {
+    return { id: requestedId, generation: own.generation };
+  }
+  const openable = items.filter(
+    (item) =>
+      item.pluginId === pluginId &&
+      typeof item.id === 'string' &&
+      typeof item.kind === 'string' &&
+      OPEN_BROKER_KINDS.has(item.kind) &&
+      typeof item.generation === 'number'
+  );
+  const chosen =
+    openable.find((item) => item.kind === 'settings_page') ?? openable[0];
+  if (chosen?.id && typeof chosen.generation === 'number') {
+    return { id: chosen.id, generation: chosen.generation };
+  }
+  return {
+    id: requestedId,
+    generation: typeof own?.generation === 'number' ? own.generation : 1,
+  };
+}
+
 export function formatErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message;
   if (typeof err === 'string' && err.trim()) return err;
@@ -590,7 +656,7 @@ function AstryxButton({
   style,
 }: {
   variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
-  size?: 'sm' | 'md';
+  size?: 'mini' | 'compact' | 'sm' | 'md';
   disabled?: boolean;
   onClick?: React.MouseEventHandler<HTMLButtonElement>;
   title?: string;
@@ -609,7 +675,27 @@ function AstryxButton({
           ? 'destructive x1pjz0fi x1m024r3 x1ilzqfv xq8i9tn x1p73he7 xkzo27j x1wfwxd8 x13aywxo'
           : 'x17x4s8c x1tgivj0 x1ilzqfv xq8i9tn x17nn4n9 xkzo27j x1wfwxd8 x13aywxo';
 
-  const sizeClass = size === 'sm' ? 'x6k0iem' : 'x1ueg155';
+  const sizeClass = size === 'md' ? 'x1ueg155' : 'x6k0iem';
+  const metrics =
+    size === 'mini'
+      ? { height: 22, font: '11px', pad: 7, icon: 12, gap: 4 }
+      : size === 'compact'
+        ? { height: 26, font: '12px', pad: 8, icon: 14, gap: 5 }
+        : size === 'sm'
+          ? {
+              height: 28,
+              font: 'var(--text-label-size, 0.875rem)',
+              pad: 12,
+              icon: 16,
+              gap: 8,
+            }
+          : {
+              height: 32,
+              font: 'var(--text-label-size, 0.875rem)',
+              pad: 12,
+              icon: 16,
+              gap: 8,
+            };
   const disabledClasses = disabled
     ? 'x1h6gzvc xbyyjgo x18o3ruo x1c071of x1pdlv7q'
     : 'x3oybdh xk4oym4';
@@ -621,7 +707,7 @@ function AstryxButton({
         ? 'transparent'
         : variant === 'destructive'
           ? 'var(--color-negative, hsl(var(--destructive)))'
-          : 'var(--color-neutral, rgba(0, 0, 0, 0.06))';
+          : 'var(--color-neutral, var(--surface-control-solid, hsl(220 14% 94%)))';
 
   const fallbackColor =
     variant === 'primary'
@@ -630,7 +716,7 @@ function AstryxButton({
         ? 'var(--color-on-negative, #ffffff)'
         : 'var(--color-text-primary, var(--text-strong, hsl(var(--foreground))))';
 
-  const resolvedFontSize = size === 'sm' ? '11.5px' : '12px';
+  const resolvedFontSize = metrics.font;
 
   return (
     <button
@@ -639,32 +725,29 @@ function AstryxButton({
       onClick={onClick}
       title={title}
       aria-label={ariaLabel}
+      data-variant={variant}
+      data-size={size}
       className={`astryx-button ${variant} ${size} x1n2onr6 x3nfvp2 x6s0dn4 xl56j7k x1txdalj xce4md1 xrrkdod xc342km xng3xce x1jxw6zd xjb2p0i x1kq96og x1e4wzip xuxw1ft x1ypdohk xrafxwg xuedmi6 x12w9bfk xlr8y92 x1gnnqk1 ${sizeClass} ${variantClasses} ${disabledClasses} ${className}`.trim()}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: size === 'sm' ? '5px' : '6px',
-        height:
-          size === 'sm'
-            ? 'var(--size-element-sm, 28px)'
-            : 'var(--size-element-md, 32px)',
-        minHeight:
-          size === 'sm'
-            ? 'var(--size-element-sm, 28px)'
-            : 'var(--size-element-md, 32px)',
-        paddingInline: size === 'sm' ? '9px' : '11px',
+        gap: `${metrics.gap}px`,
+        height: `${metrics.height}px`,
+        minHeight: `${metrics.height}px`,
+        paddingInline: `${metrics.pad}px`,
         border: 'none',
-        borderRadius: 'var(--_button-radius, var(--radius-element, 10px))',
+        borderRadius: 'var(--_button-radius, var(--radius-element, 8px))',
         backgroundColor: fallbackBg,
         color: fallbackColor,
         fontSize: resolvedFontSize,
         fontWeight: 'var(--font-weight-medium, 500)',
-        lineHeight: 1,
+        lineHeight: 'var(--text-label-leading, 1.4286)',
         whiteSpace: 'nowrap',
         flexShrink: 0,
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
+        boxShadow: 'none',
         ...style,
       }}
     >
@@ -676,8 +759,8 @@ function AstryxButton({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '13px',
-            height: '13px',
+            width: `${metrics.icon}px`,
+            height: `${metrics.icon}px`,
             flexShrink: 0,
           }}
         >
@@ -737,140 +820,7 @@ function AstryxSearchInput({
         ...style,
       }}
     >
-      <style>{`
-        .legacy-design .settings-page .astryx-field .astryx-text-input,
-        .astryx-field .astryx-text-input {
-          box-sizing: border-box !important;
-          position: relative !important;
-          z-index: 1;
-          display: flex !important;
-          align-items: center !important;
-          width: 100% !important;
-          height: var(--size-element-md, 32px) !important;
-          min-height: var(--size-element-md, 32px) !important;
-          gap: var(--spacing-2, 8px) !important;
-          padding-block: var(--spacing-1, 4px) !important;
-          padding-inline: var(--spacing-2, 8px) !important;
-          border-width: var(--border-width, 1px) !important;
-          border-style: solid !important;
-          border-color: var(--color-border-emphasized, #CCD3DB) !important;
-          border-radius: var(--_field-radius, var(--radius-element, 8px)) !important;
-          background: var(--color-background-surface, #FFFFFF) !important;
-          background-color: var(--color-background-surface, #FFFFFF) !important;
-          background-image: none !important;
-          box-shadow: none !important;
-          outline: none !important;
-          cursor: text !important;
-          transition:
-            border-color var(--duration-fast, 175ms) var(--ease-standard, cubic-bezier(0.24, 1, 0.4, 1)),
-            box-shadow var(--duration-fast, 175ms) var(--ease-standard, cubic-bezier(0.24, 1, 0.4, 1)) !important;
-        }
-        .dark .legacy-design .settings-page .astryx-field .astryx-text-input,
-        .legacy-design.dark .settings-page .astryx-field .astryx-text-input,
-        .dark .astryx-field .astryx-text-input {
-          border-color: var(--color-border-emphasized, #494D53) !important;
-          background: var(--color-background-surface, #1F1F22) !important;
-          background-color: var(--color-background-surface, #1F1F22) !important;
-        }
-        .legacy-design .settings-page .astryx-field .astryx-text-input:hover:not(:focus-within),
-        .astryx-field .astryx-text-input:hover:not(:focus-within) {
-          box-shadow: inset 0px 0px 0px 2px color-mix(in srgb, var(--color-border-emphasized, #CCD3DB) 30%, transparent) !important;
-        }
-        .dark .legacy-design .settings-page .astryx-field .astryx-text-input:hover:not(:focus-within),
-        .legacy-design.dark .settings-page .astryx-field .astryx-text-input:hover:not(:focus-within),
-        .dark .astryx-field .astryx-text-input:hover:not(:focus-within) {
-          box-shadow: inset 0px 0px 0px 2px color-mix(in srgb, var(--color-border-emphasized, #494D53) 30%, transparent) !important;
-        }
-        .legacy-design .settings-page .astryx-field .astryx-text-input:focus-within,
-        .astryx-field .astryx-text-input:focus-within {
-          border-color: var(--color-accent, #0064E0) !important;
-          box-shadow: inset 0px 0px 0px 2px var(--color-accent-muted, rgba(0, 130, 251, 0.2)) !important;
-        }
-        .dark .legacy-design .settings-page .astryx-field .astryx-text-input:focus-within,
-        .legacy-design.dark .settings-page .astryx-field .astryx-text-input:focus-within,
-        .dark .astryx-field .astryx-text-input:focus-within {
-          border-color: var(--color-accent, #2694FE) !important;
-          box-shadow: inset 0px 0px 0px 2px var(--color-accent-muted, rgba(0, 130, 251, 0.25)) !important;
-        }
-        .legacy-design .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner,
-        .legacy-design .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner:hover,
-        .legacy-design .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner:focus,
-        .legacy-design .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner:focus-visible,
-        .astryx-field .astryx-text-input > input.astryx-text-input__inner,
-        .astryx-field .astryx-text-input > input.astryx-text-input__inner:hover,
-        .astryx-field .astryx-text-input > input.astryx-text-input__inner:focus,
-        .astryx-field .astryx-text-input > input.astryx-text-input__inner:focus-visible {
-          appearance: none !important;
-          -webkit-appearance: none !important;
-          display: block !important;
-          flex: 1 1 0% !important;
-          width: 100% !important;
-          min-width: 0 !important;
-          height: auto !important;
-          min-height: 0 !important;
-          max-height: none !important;
-          padding: 0 !important;
-          padding-inline: 0 !important;
-          margin: 0 !important;
-          border: 0 !important;
-          border-width: 0 !important;
-          border-style: none !important;
-          border-color: transparent !important;
-          border-radius: 0 !important;
-          background: transparent !important;
-          background-color: transparent !important;
-          background-image: none !important;
-          box-shadow: none !important;
-          outline: none !important;
-          font-family: var(--font-family-body, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif) !important;
-          font-size: 12px !important;
-          line-height: 1.4286 !important;
-          color: var(--color-text-primary, #0A1317) !important;
-        }
-        .dark .legacy-design .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner,
-        .legacy-design.dark .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner,
-        .dark .astryx-field .astryx-text-input > input.astryx-text-input__inner {
-          color: var(--color-text-primary, #DFE2E5) !important;
-        }
-        .legacy-design .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner::placeholder,
-        .astryx-field .astryx-text-input > input.astryx-text-input__inner::placeholder {
-          color: var(--color-text-secondary, #4E606F) !important;
-          opacity: 1 !important;
-        }
-        .dark .legacy-design .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner::placeholder,
-        .legacy-design.dark .settings-page .astryx-field .astryx-text-input > input.astryx-text-input__inner::placeholder,
-        .dark .astryx-field .astryx-text-input > input.astryx-text-input__inner::placeholder {
-          color: var(--color-text-secondary, #AAAFB5) !important;
-          opacity: 1 !important;
-        }
-        .legacy-design .settings-page .astryx-field .astryx-text-input > button.astryx-text-input__clear,
-        .astryx-field .astryx-text-input > button.astryx-text-input__clear {
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          width: 16px !important;
-          height: 16px !important;
-          min-width: 16px !important;
-          min-height: 16px !important;
-          padding: 0 !important;
-          margin: 0 !important;
-          border: 0 !important;
-          border-radius: var(--radius-element, 8px) !important;
-          background: transparent !important;
-          background-color: transparent !important;
-          box-shadow: none !important;
-          color: var(--color-icon-secondary, #4E606F) !important;
-          cursor: pointer !important;
-          flex-shrink: 0 !important;
-          outline: none !important;
-        }
-        .dark .legacy-design .settings-page .astryx-field .astryx-text-input > button.astryx-text-input__clear,
-        .legacy-design.dark .settings-page .astryx-field .astryx-text-input > button.astryx-text-input__clear,
-        .dark .astryx-field .astryx-text-input > button.astryx-text-input__clear {
-          color: var(--color-icon-secondary, #AAAFB5) !important;
-        }
-      `}</style>
-      <label
+            <label
         id={labelId}
         htmlFor={inputId}
         className="astryx-field-label"
@@ -1336,9 +1286,7 @@ function SectionGroup({
             <span>{title}</span>
           </h3>
           {description ? (
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {description}
-            </p>
+            <p className="settings-section__description">{description}</p>
           ) : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
@@ -1515,10 +1463,12 @@ function WindowPickerModal({
   sharedState,
   invoke,
   onSharedChanged,
+  embedded = false,
 }: {
   open: boolean;
   onClose: () => void;
   screenEnabled: boolean;
+  embedded?: boolean;
   sharedState: SharedState | null;
   invoke: (
     method: string,
@@ -1650,41 +1600,56 @@ function WindowPickerModal({
 
   return (
     <div
-      data-floating-layer="modal"
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-      }}
+      data-floating-layer={embedded ? undefined : 'modal'}
+      className={
+        embedded
+          ? 'flex h-full min-h-0 w-full flex-col'
+          : 'fixed inset-0 z-[9999] flex items-center justify-center p-4'
+      }
+      style={
+        embedded
+          ? { display: 'flex', height: '100%', minHeight: 0, width: '100%' }
+          : {
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+            }
+      }
     >
-      <div
-        className="dialog-backdrop fixed inset-0"
-        aria-hidden="true"
-        style={{ position: 'fixed', inset: 0 }}
-        onClick={onClose}
-      />
+      {embedded ? null : (
+        <div
+          className="dialog-backdrop fixed inset-0"
+          aria-hidden="true"
+          style={{ position: 'fixed', inset: 0 }}
+          onClick={onClose}
+        />
+      )}
       <div
         role="dialog"
-        aria-modal="true"
-        aria-label="选择要共享给 Agent 的桌面窗口"
+        aria-modal={embedded ? undefined : true}
+        aria-label={embedded ? '电脑控制' : '选择要共享给 Agent 的桌面窗口'}
         className="dialog-surface relative z-[9999] flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border"
         style={{
           position: 'relative',
-          zIndex: 9999,
+          zIndex: embedded ? 1 : 9999,
           display: 'flex',
           flexDirection: 'column',
-          width: 'min(100%, 720px)',
-          maxHeight: 'min(78vh, 620px)',
+          width: embedded ? '100%' : 'min(100%, 720px)',
+          height: embedded ? '100%' : undefined,
+          maxHeight: embedded ? '100%' : 'min(78vh, 620px)',
           overflow: 'hidden',
-          borderRadius: 'var(--radius-container, 12px)',
-          border: '1px solid var(--border-glass, hsl(var(--border)))',
+          borderRadius: embedded ? 0 : 'var(--radius-container, 12px)',
+          border: embedded
+            ? 'none'
+            : '1px solid var(--border-glass, hsl(var(--border)))',
           background: 'var(--surface-dialog, hsl(var(--popover)))',
-          boxShadow: 'var(--shadow-popover, 0 24px 64px rgba(0, 0, 0, 0.28))',
+          boxShadow: embedded
+            ? 'none'
+            : 'var(--shadow-popover, 0 24px 64px rgba(0, 0, 0, 0.28))',
         }}
       >
         <div
@@ -1716,9 +1681,11 @@ function WindowPickerModal({
               仅被明确授权的窗口可被 Agent 查看或操作；未授权窗口将保持隔离。
             </p>
           </div>
-          <AstryxButton variant="primary" size="md" onClick={onClose}>
-            完成
-          </AstryxButton>
+          {embedded ? null : (
+            <AstryxButton variant="primary" size="md" onClick={onClose}>
+              完成
+            </AstryxButton>
+          )}
         </div>
 
         <div
@@ -2198,7 +2165,7 @@ function LocalAppPickerModal({
                             </span>
                           ) : null}
                           {app.running ? (
-                            <span className="settings-status-pill-success px-1.5 py-0.2 text-[10px] font-medium">
+                            <span className="agent-registry-status settings-status-pill-success">
                               运行中
                             </span>
                           ) : null}
@@ -2351,10 +2318,13 @@ export default function ComputerUseSettingsView({
   const selectDeliveryId = useId();
   const customBlockInputId = useId();
 
+  useEffect(() => retainStyle('vibex-plugin-computer-use', appCss), [appCss]);
+
   const invokeQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const daemonUrlRef = useRef<string | null>(readCachedDaemonUrl());
   const renewedSessionRef = useRef<{
     token: string;
+    surfaceId: string;
     generation: number;
     sequence: number;
   } | null>(null);
@@ -2384,7 +2354,7 @@ export default function ComputerUseSettingsView({
           throw new Error('Tauri internals unavailable');
         }
         const pluginId = environment?.pluginId || 'vibex-plugin-computer-use';
-        const surfaceId = environment?.surfaceId || 'computer-use';
+        let surfaceId = environment?.surfaceId || 'computer-use';
 
         const callAppCmd = async (
           command: string,
@@ -2403,24 +2373,16 @@ export default function ComputerUseSettingsView({
         if (!renewedSessionRef.current) {
           let generation = 1;
           try {
-            const catalog = (await callAppCmd(
-              'plugin_contributions_catalog',
-              {}
-            )) as Array<{
-              pluginId?: string;
-              id?: string;
-              generation?: number;
-            }> | null;
-            const found = Array.isArray(catalog)
-              ? catalog.find(
-                  (c) => c.pluginId === pluginId && c.id === surfaceId
-                )
-              : null;
-            if (found && typeof found.generation === 'number') {
-              generation = found.generation;
-            }
+            const catalog = await callAppCmd('plugin_contribution_catalog', {});
+            const broker = resolveBrokerSurface(
+              catalogItems(catalog),
+              pluginId,
+              surfaceId
+            );
+            surfaceId = broker.id;
+            generation = broker.generation;
           } catch {
-            // use generation 1
+            // use the requested surface and generation 1
           }
           const bytes = new Uint8Array(24);
           globalThis.crypto.getRandomValues(bytes);
@@ -2438,6 +2400,7 @@ export default function ComputerUseSettingsView({
           }
           renewedSessionRef.current = {
             token: opened.token,
+            surfaceId,
             generation,
             sequence: 0,
           };
@@ -2448,7 +2411,7 @@ export default function ComputerUseSettingsView({
         try {
           return await callAppCmd('plugin_surface_invoke', {
             pluginId,
-            surfaceId,
+            surfaceId: session.surfaceId,
             generation: session.generation,
             token: session.token,
             requestId: globalThis.crypto.randomUUID(),
@@ -3010,6 +2973,22 @@ export default function ComputerUseSettingsView({
     [draft?.defaultBlocklist]
   );
 
+  if (environment?.slot === 'status.after-mcp') {
+    return (
+      <div className="settings-page" style={{ width: '100%', height: '100%', minHeight: 0 }}>
+        <WindowPickerModal
+          open
+          embedded
+          onClose={() => undefined}
+          screenEnabled={draft?.screenEnabled ?? savedSettings?.screenEnabled ?? false}
+          sharedState={sharedState}
+          invoke={invoke}
+          onSharedChanged={setSharedState}
+        />
+      </div>
+    );
+  }
+
   if (loading && !draft) {
     return (
       <div className="settings-page">
@@ -3063,35 +3042,17 @@ export default function ComputerUseSettingsView({
 
   return (
     <div className="settings-page">
-      <style>{`
-        .settings-page .settings-page-header p,
-        .settings-page .settings-section > div:first-child p {
-          font-size: 12px;
-          line-height: 1.45;
-        }
-        .settings-page .settings-row :where(label, .settings-row__label) {
-          font-size: 12px;
-          line-height: 1.35;
-        }
-        .settings-page .settings-row .settings-row__description {
-          font-size: 11.5px;
-          line-height: 1.45;
-        }
-      `}</style>
-      <div className="settings-content">
+            <div className="settings-content">
         <header className="settings-page-header flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2.5">
               <h2>电脑控制</h2>
               <span
-                className={`px-2 py-0.5 text-xs font-medium ${statusPill.className}`}
+                className={`agent-registry-status ${statusPill.className}`}
               >
                 {statusPill.label}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              允许 Agent 通过无障碍树与截图感知授权窗口，并在后台或前台执行键鼠与窗口操作。
-            </p>
           </div>
           <div className="flex items-center gap-2">
             {isEnabled ? (
@@ -3102,7 +3063,7 @@ export default function ComputerUseSettingsView({
                 style={{
                   height: '32px',
                   minHeight: '32px',
-                  borderRadius: '8px',
+                  borderRadius: 'var(--radius)',
                 }}
               >
                 <Icons.AppWindow />
@@ -3117,7 +3078,7 @@ export default function ComputerUseSettingsView({
                 style={{
                   height: '32px',
                   minHeight: '32px',
-                  borderRadius: '8px',
+                  borderRadius: 'var(--radius)',
                   border: '1px solid hsl(var(--destructive) / 0.28)',
                   background: 'hsl(var(--destructive) / 0.08)',
                   color: 'hsl(var(--destructive))',
@@ -3147,17 +3108,13 @@ export default function ComputerUseSettingsView({
 
         <div className="settings-sections">
           {/* 1. Master Switch & Active Shared Windows */}
-          <SectionGroup
-            icon={<Icons.Monitor />}
-            title="服务开关与实时共享"
-            description="开启后向 Agent 暴露 18 个 computer_* MCP 工具；Agent 只能访问您在此处明确共享的窗口。"
-          >
+          <SectionGroup icon={<Icons.Monitor />} title="服务开关与实时共享">
             <div className="settings-row">
               <div>
                 <div className="text-sm font-medium">
                   启用电脑控制 (Computer Use)
                 </div>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   关闭开关会立即终止辅助进程并撤销所有正在共享的窗口授权。
                 </p>
               </div>
@@ -3173,48 +3130,29 @@ export default function ComputerUseSettingsView({
               <div className="border-t border-[var(--border-subtle,hsl(var(--border)))]">
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
                   <div>
-                    <div className="text-xs font-semibold">
+                    <div className="text-sm font-medium">
                       当前已授权的共享目标 ({totalSharedCount})
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="settings-row__description">
                       可随时切换单个目标的“仅查看 / 允许控制”级别或立即停止共享。
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
+                    <AstryxButton
+                      variant="secondary"
+                      size="compact"
                       onClick={() => setPickerOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-2.5 text-xs font-medium transition-colors hover:bg-[var(--surface-control-hover,hsl(var(--muted)))]"
-                      style={{
-                        height: '30px',
-                        minHeight: '30px',
-                        borderRadius: '8px',
-                        border:
-                          '1px solid var(--border-subtle, hsl(var(--border)))',
-                        background:
-                          'var(--surface-raised-control, var(--surface-control))',
-                        color: 'var(--text-primary, hsl(var(--foreground)))',
-                      }}
                     >
                       + 添加共享窗口
-                    </button>
+                    </AstryxButton>
                     {totalSharedCount > 0 ? (
-                      <button
-                        type="button"
+                      <AstryxButton
+                        variant="secondary"
+                        size="compact"
                         onClick={() => void handleRevokeAll()}
-                        className="inline-flex items-center px-2.5 text-xs text-muted-foreground transition-colors hover:bg-[var(--surface-control-hover,hsl(var(--muted)))] hover:text-foreground"
-                        style={{
-                          height: '30px',
-                          minHeight: '30px',
-                          borderRadius: '8px',
-                          border:
-                            '1px solid var(--border-subtle, hsl(var(--border)))',
-                          background:
-                            'var(--surface-raised-control, var(--surface-control))',
-                        }}
                       >
                         撤销全部
-                      </button>
+                      </AstryxButton>
                     ) : null}
                   </div>
                 </div>
@@ -3258,8 +3196,9 @@ export default function ComputerUseSettingsView({
                               )
                             }
                           />
-                          <button
-                            type="button"
+                          <AstryxButton
+                            variant="secondary"
+                            size="mini"
                             onClick={() =>
                               void invoke('computer.shareScreen', {
                                 level: 'none',
@@ -3267,19 +3206,9 @@ export default function ComputerUseSettingsView({
                                 setSharedState(next as SharedState)
                               )
                             }
-                            className="inline-flex items-center px-2.5 text-xs text-muted-foreground transition-colors hover:bg-[var(--surface-control-hover,hsl(var(--muted)))] hover:text-foreground"
-                            style={{
-                              height: '28px',
-                              minHeight: '28px',
-                              borderRadius: '8px',
-                              border:
-                                '1px solid var(--border-subtle, hsl(var(--border)))',
-                              background:
-                                'var(--surface-raised-control, var(--surface-control))',
-                            }}
                           >
                             移除
-                          </button>
+                          </AstryxButton>
                         </div>
                       </div>
                     ) : null}
@@ -3319,8 +3248,9 @@ export default function ComputerUseSettingsView({
                               )
                             }
                           />
-                          <button
-                            type="button"
+                          <AstryxButton
+                            variant="secondary"
+                            size="mini"
                             onClick={() =>
                               void invoke('computer.shareApp', {
                                 appId: app.appId,
@@ -3329,19 +3259,9 @@ export default function ComputerUseSettingsView({
                                 setSharedState(next as SharedState)
                               )
                             }
-                            className="inline-flex items-center px-2.5 text-xs text-muted-foreground transition-colors hover:bg-[var(--surface-control-hover,hsl(var(--muted)))] hover:text-foreground"
-                            style={{
-                              height: '28px',
-                              minHeight: '28px',
-                              borderRadius: '8px',
-                              border:
-                                '1px solid var(--border-subtle, hsl(var(--border)))',
-                              background:
-                                'var(--surface-raised-control, var(--surface-control))',
-                            }}
                           >
                             移除
-                          </button>
+                          </AstryxButton>
                         </div>
                       </div>
                     ))}
@@ -3382,27 +3302,18 @@ export default function ComputerUseSettingsView({
                               }).then(() => refreshLiveState(false))
                             }
                           />
-                          <button
-                            type="button"
+                          <AstryxButton
+                            variant="secondary"
+                            size="mini"
                             onClick={() =>
                               void invoke('computer.shareWindow', {
                                 targetId: win.targetId,
                                 level: 'none',
                               }).then(() => refreshLiveState(false))
                             }
-                            className="inline-flex items-center px-2.5 text-xs text-muted-foreground transition-colors hover:bg-[var(--surface-control-hover,hsl(var(--muted)))] hover:text-foreground"
-                            style={{
-                              height: '28px',
-                              minHeight: '28px',
-                              borderRadius: '8px',
-                              border:
-                                '1px solid var(--border-subtle, hsl(var(--border)))',
-                              background:
-                                'var(--surface-raised-control, var(--surface-control))',
-                            }}
                           >
                             移除
-                          </button>
+                          </AstryxButton>
                         </div>
                       </div>
                     ))}
@@ -3413,11 +3324,7 @@ export default function ComputerUseSettingsView({
           </SectionGroup>
 
           {/* 2. cua-driver Card & OS Permissions */}
-          <SectionGroup
-            icon={<Icons.Cpu />}
-            title="驱动与系统权限"
-            description="管理底层 cua-driver 二进制驱动与操作系统无障碍、录屏权限。"
-          >
+          <SectionGroup icon={<Icons.Cpu />} title="驱动与系统权限">
             <div className="settings-row">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -3426,20 +3333,20 @@ export default function ComputerUseSettingsView({
                     v{driverView.version}
                   </span>
                   {driverView.state === 'ready' ? (
-                    <span className="settings-status-pill-success px-2 py-0.5 text-[11px] font-medium">
+                    <span className="agent-registry-status settings-status-pill-success">
                       已安装
                     </span>
                   ) : driverView.state === 'installing' ? (
-                    <span className="settings-status-pill-warning px-2 py-0.5 text-[11px] font-medium">
+                    <span className="agent-registry-status settings-status-pill-warning">
                       下载安装中...
                     </span>
                   ) : (
-                    <span className="settings-status-pill-neutral px-2 py-0.5 text-[11px] font-medium">
+                    <span className="agent-registry-status settings-status-pill-neutral">
                       未安装
                     </span>
                   )}
                 </div>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   {driverView.binaryPath
                     ? `安装路径：${driverView.binaryPath}`
                     : '提供跨平台无障碍树读取、截图缩放与后台事件合成能力。'}
@@ -3491,13 +3398,13 @@ export default function ComputerUseSettingsView({
                         升级至 v{driverView.version}
                       </button>
                     ) : null}
-                    <button
-                      type="button"
+                    <AstryxButton
+                      variant="secondary"
+                      size="compact"
                       onClick={() => void handleUninstallDriver()}
-                      className="inline-flex h-8 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-3 text-xs font-medium hover:bg-[var(--surface-control-hover,hsl(var(--muted)))]"
                     >
                       移除驱动
-                    </button>
+                    </AstryxButton>
                   </>
                 ) : (
                   <button
@@ -3531,7 +3438,7 @@ export default function ComputerUseSettingsView({
                   >
                     <div>
                       <div className="text-sm font-medium">{label}</div>
-                      <p className="settings-row__description text-xs text-muted-foreground">
+                      <p className="settings-row__description">
                         {perm.granted
                           ? '已向 vibex-computer-helper 授予权限'
                           : '需要向辅助进程授予此系统权限以正常工作'}
@@ -3539,7 +3446,7 @@ export default function ComputerUseSettingsView({
                     </div>
                     <div className="flex items-center gap-2">
                       {perm.granted ? (
-                        <span className="settings-status-pill-success px-2 py-0.5 text-xs font-medium">
+                        <span className="agent-registry-status settings-status-pill-success">
                           已授权
                         </span>
                       ) : (
@@ -3557,17 +3464,17 @@ export default function ComputerUseSettingsView({
                               请求权限
                             </button>
                           ) : null}
-                          <button
-                            type="button"
+                          <AstryxButton
+                            variant="secondary"
+                            size="compact"
                             onClick={() =>
                               void invoke('computer.openPermissionSettings', {
                                 kind: perm.kind,
                               })
                             }
-                            className="inline-flex h-8 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] px-2.5 text-xs"
                           >
                             打开系统设置
-                          </button>
+                          </AstryxButton>
                         </>
                       )}
                     </div>
@@ -3584,11 +3491,11 @@ export default function ComputerUseSettingsView({
                       : platform}
                     )
                   </div>
-                  <p className="settings-row__description text-xs text-muted-foreground">
+                  <p className="settings-row__description">
                     当前操作系统无需额外 TCC 弹窗授权，将自动遵循窗口级共享边界与 UIPI 完整性级别。
                   </p>
                 </div>
-                <span className="settings-status-pill-success px-2 py-0.5 text-xs font-medium">
+                <span className="agent-registry-status settings-status-pill-success">
                   已就绪
                 </span>
               </div>
@@ -3606,11 +3513,10 @@ export default function ComputerUseSettingsView({
                 <label
                   htmlFor={selectTtlId}
                   className="text-sm font-medium"
-                  style={{ fontSize: '12px', lineHeight: 1.35 }}
                 >
                   共享闲置自动过期时间
                 </label>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   当某个已共享窗口在此时间内未被 Agent 读取或操作时，自动撤销其共享授权。
                 </p>
               </div>
@@ -3635,23 +3541,23 @@ export default function ComputerUseSettingsView({
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">全局紧急停止快捷键</span>
                   {stopKeyStatus?.active ? (
-                    <span className="settings-status-pill-success px-2 py-0.5 text-[11px] font-medium">
+                    <span className="agent-registry-status settings-status-pill-success">
                       已生效
                     </span>
                   ) : stopKeyStatus?.failed ? (
                     <span
-                      className="settings-status-pill-warning px-2 py-0.5 text-[11px] font-medium"
+                      className="agent-registry-status settings-status-pill-warning"
                       title={stopKeyStatus.detail ?? undefined}
                     >
                       快捷键被占用
                     </span>
                   ) : (
-                    <span className="settings-status-pill-neutral px-2 py-0.5 text-[11px] font-medium">
+                    <span className="agent-registry-status settings-status-pill-neutral">
                       未注册
                     </span>
                   )}
                 </div>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   按下快捷键立即撤销所有窗口授权并中断正在执行的驱动动作（需至少包含两个修饰键且含 Ctrl 或 Cmd）。
                 </p>
               </div>
@@ -3666,7 +3572,7 @@ export default function ComputerUseSettingsView({
                     {shortcutParts.map((part, idx) => (
                       <kbd
                         key={`${part}-${idx}`}
-                        className="settings-kbd rounded px-1.5 py-0.5 font-mono text-xs"
+                        className="settings-kbd px-2 py-1 text-[11px] font-mono"
                       >
                         {part}
                       </kbd>
@@ -3676,17 +3582,18 @@ export default function ComputerUseSettingsView({
                   <span className="text-xs text-muted-foreground">已停用</span>
                 )}
 
-                <button
-                  type="button"
+                <AstryxButton
+                  variant="secondary"
+                  size="compact"
                   onClick={() => setRecordingShortcut((prev) => !prev)}
-                  className="inline-flex h-8 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-2.5 text-xs font-medium hover:bg-[var(--surface-control-hover,hsl(var(--muted)))]"
                 >
                   {recordingShortcut ? '取消录制' : '录制快捷键'}
-                </button>
+                </AstryxButton>
                 {draft &&
                 draft.stopShortcut !== draft.defaultStopShortcut ? (
-                  <button
-                    type="button"
+                  <AstryxButton
+                    variant="secondary"
+                    size="compact"
                     onClick={() =>
                       setDraft((prev) =>
                         prev
@@ -3694,23 +3601,22 @@ export default function ComputerUseSettingsView({
                           : prev
                       )
                     }
-                    className="inline-flex h-8 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] px-2.5 text-xs text-muted-foreground hover:text-foreground"
                   >
                     恢复默认
-                  </button>
+                  </AstryxButton>
                 ) : null}
                 {draft?.stopShortcut ? (
-                  <button
-                    type="button"
+                  <AstryxButton
+                    variant="secondary"
+                    size="compact"
                     onClick={() =>
                       setDraft((prev) =>
                         prev ? { ...prev, stopShortcut: '' } : prev
                       )
                     }
-                    className="inline-flex h-8 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] px-2.5 text-xs text-muted-foreground hover:text-foreground"
                   >
                     停用
-                  </button>
+                  </AstryxButton>
                 ) : null}
               </div>
             </div>
@@ -3718,8 +3624,8 @@ export default function ComputerUseSettingsView({
             <div className="settings-row border-t border-[var(--border-subtle,hsl(var(--border)))]">
               <div>
                 <div className="text-sm font-medium">显示桌面共享状态指示条</div>
-                <p className="settings-row__description text-xs text-muted-foreground">
-                  当存在共享窗口或全屏共享时，在面板顶部高亮提示当前共享状态。
+                <p className="settings-row__description">
+                  当存在共享窗口或全屏共享时，在每个共享窗口边缘显示呼吸光带。
                 </p>
               </div>
               <SwitchControl
@@ -3741,7 +3647,7 @@ export default function ComputerUseSettingsView({
                 <div className="text-sm font-medium">
                   允许前台输入投递 (Foreground Delivery)
                 </div>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   默认使用无障碍动作与虚拟指针在后台操作窗口；开启后允许在不支持后台投递的应用中将窗口置前操作。
                 </p>
               </div>
@@ -3777,11 +3683,10 @@ export default function ComputerUseSettingsView({
                   <label
                     htmlFor={selectDeliveryId}
                     className="text-sm font-medium"
-                    style={{ fontSize: '12px', lineHeight: 1.35 }}
                   >
                     默认输入投递模式
                   </label>
-                  <p className="settings-row__description text-xs text-muted-foreground">
+                  <p className="settings-row__description">
                     当 Agent 调用点击、输入或按键工具未显式指定 delivery 参数时采用的默认方式。
                   </p>
                 </div>
@@ -3820,7 +3725,7 @@ export default function ComputerUseSettingsView({
                 <div className="text-sm font-medium">
                   允许启动应用与调整窗口位置
                 </div>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   向 Agent 开放 computer_launch_app 与 computer_set_window_frame 工具（受拒绝共享应用名单约束）。
                 </p>
               </div>
@@ -3838,7 +3743,7 @@ export default function ComputerUseSettingsView({
             <div className="settings-row border-t border-[var(--border-subtle,hsl(var(--border)))]">
               <div>
                 <div className="text-sm font-medium">允许读写系统剪贴板</div>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   向 Agent 开放 computer_clipboard_read 与 computer_clipboard_write 工具。
                 </p>
               </div>
@@ -3858,7 +3763,7 @@ export default function ComputerUseSettingsView({
                 <div className="text-sm font-medium">
                   允许在窗口选择器中共享整个屏幕
                 </div>
-                <p className="settings-row__description text-xs text-muted-foreground">
+                <p className="settings-row__description">
                   开启后可在「选择共享窗口」弹窗中启用整个屏幕级别的共享授权。
                 </p>
               </div>
@@ -3879,22 +3784,21 @@ export default function ComputerUseSettingsView({
                   <label
                     htmlFor={customBlockInputId}
                     className="text-sm font-medium"
-                    style={{ fontSize: '12px', lineHeight: 1.35 }}
                   >
                     拒绝共享应用名单 ({unifiedBlocklist.length})
                   </label>
-                  <p className="settings-row__description text-xs text-muted-foreground">
+                  <p className="settings-row__description">
                     名单中的应用无论在单窗口、整应用还是全屏模式下均不会被 Agent 读取、截图或控制。
                   </p>
                 </div>
                 {hasRemovedDefaultBlock ? (
-                  <button
-                    type="button"
+                  <AstryxButton
+                    variant="secondary"
+                    size="mini"
                     onClick={handleRestoreDefaultBlocklist}
-                    className="inline-flex h-7 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-2.5 text-xs text-muted-foreground hover:text-foreground"
                   >
                     恢复默认名单
-                  </button>
+                  </AstryxButton>
                 ) : null}
               </div>
 
@@ -3925,40 +3829,40 @@ export default function ComputerUseSettingsView({
                           </span>
                         ) : null}
                       </div>
-                      <button
-                        type="button"
+                      <AstryxButton
+                        variant="secondary"
+                        size="mini"
+                        ariaLabel={`移除 ${item.title}`}
                         onClick={() =>
                           item.kind === 'default'
                             ? handleRemoveDefaultBlockEntry(item.value)
                             : handleRemoveCustomBlockEntry(item.value)
                         }
-                        aria-label={`移除 ${item.title}`}
-                        className="inline-flex h-6 shrink-0 items-center rounded border border-[var(--border-subtle,hsl(var(--border)))] px-2 text-[11px] text-muted-foreground hover:bg-[var(--surface-control-hover,hsl(var(--muted)))] hover:text-foreground"
                       >
                         移除
-                      </button>
+                      </AstryxButton>
                     </div>
                   ))}
                 </div>
               )}
 
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
+                <AstryxButton
+                  variant="secondary"
+                  size="compact"
                   onClick={() => setAppPickerOpen(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-3 text-xs font-medium hover:bg-[var(--surface-control-hover,hsl(var(--muted)))]"
+                  icon={<Icons.AppWindow />}
                 >
-                  <Icons.AppWindow />
                   选择应用...
-                </button>
-                <button
-                  type="button"
+                </AstryxButton>
+                <AstryxButton
+                  variant="secondary"
+                  size="compact"
                   disabled={pickingExe}
                   onClick={() => void handlePickExecutableFile()}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-3 text-xs font-medium hover:bg-[var(--surface-control-hover,hsl(var(--muted)))] disabled:opacity-50"
                 >
                   {pickingExe ? '正在打开...' : '选择执行文件...'}
-                </button>
+                </AstryxButton>
                 <div className="flex min-w-[220px] flex-1 items-center gap-1.5">
                   <AstryxSearchInput
                     id={customBlockInputId}
@@ -3975,13 +3879,13 @@ export default function ComputerUseSettingsView({
                     className="flex-1"
                     style={{ flex: '1 1 0%', minWidth: 0 }}
                   />
-                  <button
-                    type="button"
+                  <AstryxButton
+                    variant="secondary"
+                    size="compact"
                     onClick={handleAddCustomBlockEntry}
-                    className="inline-flex h-8 shrink-0 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-3 text-xs font-medium hover:bg-[var(--surface-control-hover,hsl(var(--muted)))]"
                   >
                     添加
-                  </button>
+                  </AstryxButton>
                 </div>
               </div>
             </div>
@@ -3994,17 +3898,17 @@ export default function ComputerUseSettingsView({
             description="实时展示 Agent 最近执行的窗口读取与键鼠动作记录。"
             action={
               activity.length > 0 ? (
-                <button
-                  type="button"
+                <AstryxButton
+                  variant="secondary"
+                  size="mini"
                   onClick={() =>
                     void invoke('computer.clearActivity', {}).then(() =>
                       setActivity([])
                     )
                   }
-                  className="inline-flex h-7 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-2.5 text-xs text-muted-foreground hover:text-foreground"
                 >
                   清空记录
-                </button>
+                </AstryxButton>
               ) : undefined
             }
           >
@@ -4039,7 +3943,7 @@ export default function ComputerUseSettingsView({
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <span
-                          className={`px-1.5 py-0.5 text-[11px] font-medium ${
+                          className={`agent-registry-status ${
                             item.outcome === 'done'
                               ? 'settings-status-pill-success'
                               : item.outcome === 'refused'
@@ -4074,14 +3978,14 @@ export default function ComputerUseSettingsView({
                   电脑控制偏好设置已修改，保存后立即生效
                 </span>
                 <div className="settings-action-bar__actions">
-                  <button
-                    type="button"
+                  <AstryxButton
+                    variant="secondary"
+                    size="mini"
                     disabled={saving}
                     onClick={handleDiscardPreferences}
-                    className="inline-flex h-7 items-center rounded-md border border-[var(--border-subtle,hsl(var(--border)))] bg-[var(--surface-control,transparent)] px-3 text-xs font-medium hover:bg-[var(--surface-control-hover,hsl(var(--muted)))]"
                   >
                     放弃更改
-                  </button>
+                  </AstryxButton>
                   <button
                     type="button"
                     disabled={saving}

@@ -538,7 +538,10 @@ pub fn render_computer_verify_result(outcome: &Value) -> Value {
         .unwrap_or("unknown");
     let mut out = format!(
         "Verify on window {}: {status}",
-        outcome.get("targetId").and_then(Value::as_str).unwrap_or("?")
+        outcome
+            .get("targetId")
+            .and_then(Value::as_str)
+            .unwrap_or("?")
     );
     out.push_str(&format!(
         " ({} sample(s), {} ms{}).",
@@ -858,7 +861,9 @@ fn computer_bool(arguments: &Value, tool: &str, key: &str) -> Result<bool, Strin
     match arguments.get(key) {
         None | Some(Value::Null) => Ok(false),
         Some(Value::Bool(b)) => Ok(*b),
-        Some(other) => Err(format!("{tool}: `{key}` must be true or false, not {other}")),
+        Some(other) => Err(format!(
+            "{tool}: `{key}` must be true or false, not {other}"
+        )),
     }
 }
 
@@ -1219,7 +1224,10 @@ pub fn render_computer_act_result(outcome: &Value) -> Value {
     };
     let mut out = format!(
         "Window {}: {effect}.",
-        outcome.get("targetId").and_then(Value::as_str).unwrap_or("?")
+        outcome
+            .get("targetId")
+            .and_then(Value::as_str)
+            .unwrap_or("?")
     );
     let route = match s("route") {
         "accessibility" => Some("through the accessibility interface"),

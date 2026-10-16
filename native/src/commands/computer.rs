@@ -472,6 +472,9 @@ pub struct ComputerService {
     /// Whether the person wants the strip at all (Settings), as the last
     /// settings change the service followed left it.
     strip_wanted: AtomicBool,
+    /// Per-window breathing edge while something is shared and the person
+    /// left the indicator on. No-op where the platform has no overlay.
+    glow: crate::computer::glow::WindowGlow,
     /// Held across reading the state and telling everyone of it, so two
     /// changes told at once are told in the order they were read — the
     /// older never lands last.
@@ -628,6 +631,7 @@ impl ComputerService {
             grant_gate: std::sync::Mutex::new(()),
             policy: std::sync::Mutex::new(policy),
             strip_wanted: AtomicBool::new(strip_wanted),
+            glow: crate::computer::glow::WindowGlow::start(),
             state_gate: std::sync::Mutex::new(()),
             drivers,
             clipboard: std::sync::Mutex::new(None),
@@ -754,6 +758,15 @@ impl ComputerService {
                 || self.targets.shared_screen().is_some();
             desktop.indicator.set(Strip::of(shared, wanted));
         }
+        self.sync_glow();
+    }
+
+    /// Move the window glow with the current grants and the indicator switch.
+    fn sync_glow(&self) {
+        let wanted = self.strip_wanted.load(Ordering::Acquire);
+        let handles = self.targets.shared_handles();
+        let screen = self.targets.shared_screen().is_some();
+        self.glow.sync(wanted, &handles, screen);
     }
 
     pub fn events(&self) -> &ComputerEvents {
@@ -880,6 +893,7 @@ impl ComputerService {
                     || screen.is_some_and(|s| s.level == GrantLevel::Control),
             );
         }
+        self.sync_glow();
     }
 
     /// The person pressed Stop: every grant ends, whatever is under way is
@@ -1283,10 +1297,9 @@ impl ComputerService {
             Err((why, ended)) => {
                 self.announce(&ended.into_iter().collect::<Vec<_>>());
                 Err(match why {
-                    ReadRefusal::NotGrantable(why) => Refusal::refused(
-                        ERROR_BLOCKED,
-                        blocked_note(&ticket.target_id, why.note()),
-                    ),
+                    ReadRefusal::NotGrantable(why) => {
+                        Refusal::refused(ERROR_BLOCKED, blocked_note(&ticket.target_id, why.note()))
+                    }
                     ReadRefusal::NoSuchTarget | ReadRefusal::GrantRequired => refused(),
                 })
             }

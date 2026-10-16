@@ -229,4 +229,3 @@ async fn handle_rpc(
     };
     (cors_headers(), Json(payload))
 }
-

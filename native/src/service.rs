@@ -248,8 +248,7 @@ impl GlobalStopHotkey {
                     }
                     None => {
                         status.failed = Some(shortcut.to_string());
-                        status.detail =
-                            Some("not a key the stop shortcut can be on".to_string());
+                        status.detail = Some("not a key the stop shortcut can be on".to_string());
                     }
                 }
             }
@@ -706,24 +705,21 @@ impl DaemonState {
                     .get("targetId")
                     .and_then(Value::as_str)
                     .ok_or_else(|| "missing `targetId`".to_string())?;
-                let level: GrantLevel = serde_json::from_value(
-                    params.get("level").cloned().unwrap_or(json!("none")),
-                )
-                .map_err(|e| e.to_string())?;
+                let level: GrantLevel =
+                    serde_json::from_value(params.get("level").cloned().unwrap_or(json!("none")))
+                        .map_err(|e| e.to_string())?;
                 let res = computer_share_window_core(&self.computer, target_id, level)
                     .await
                     .map_err(|e| e.message)?;
                 serde_json::to_value(res).map_err(|e| e.to_string())
             }
             "computer.shareWindows" => {
-                let target_ids: Vec<String> = serde_json::from_value(
-                    params.get("targetIds").cloned().unwrap_or(json!([])),
-                )
-                .map_err(|e| e.to_string())?;
-                let level: GrantLevel = serde_json::from_value(
-                    params.get("level").cloned().unwrap_or(json!("none")),
-                )
-                .map_err(|e| e.to_string())?;
+                let target_ids: Vec<String> =
+                    serde_json::from_value(params.get("targetIds").cloned().unwrap_or(json!([])))
+                        .map_err(|e| e.to_string())?;
+                let level: GrantLevel =
+                    serde_json::from_value(params.get("level").cloned().unwrap_or(json!("none")))
+                        .map_err(|e| e.to_string())?;
                 let res = computer_share_windows_core(&self.computer, &target_ids, level)
                     .await
                     .map_err(|e| e.message)?;
@@ -732,20 +728,18 @@ impl DaemonState {
             "computer.shareApp" => {
                 let target_id = params.get("targetId").and_then(Value::as_str);
                 let app_id = params.get("appId").and_then(Value::as_str);
-                let level: GrantLevel = serde_json::from_value(
-                    params.get("level").cloned().unwrap_or(json!("none")),
-                )
-                .map_err(|e| e.to_string())?;
+                let level: GrantLevel =
+                    serde_json::from_value(params.get("level").cloned().unwrap_or(json!("none")))
+                        .map_err(|e| e.to_string())?;
                 let res = computer_share_app_core(&self.computer, target_id, app_id, level)
                     .await
                     .map_err(|e| e.to_string())?;
                 serde_json::to_value(res).map_err(|e| e.to_string())
             }
             "computer.shareScreen" => {
-                let level: GrantLevel = serde_json::from_value(
-                    params.get("level").cloned().unwrap_or(json!("none")),
-                )
-                .map_err(|e| e.to_string())?;
+                let level: GrantLevel =
+                    serde_json::from_value(params.get("level").cloned().unwrap_or(json!("none")))
+                        .map_err(|e| e.to_string())?;
                 let res = computer_share_screen_core(&self.computer, level)
                     .await
                     .map_err(|e| e.message)?;
@@ -1039,8 +1033,13 @@ fn pick_executable_file() -> PickedExecutable {
         };
     }
 
-    let len = file_buf.iter().position(|&c| c == 0).unwrap_or(file_buf.len());
-    let path = String::from_utf16_lossy(&file_buf[..len]).trim().to_string();
+    let len = file_buf
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(file_buf.len());
+    let path = String::from_utf16_lossy(&file_buf[..len])
+        .trim()
+        .to_string();
     if path.is_empty() {
         return PickedExecutable {
             canceled: true,
@@ -1055,9 +1054,12 @@ fn pick_executable_file() -> PickedExecutable {
         .filter(|s| !s.is_empty())
         .map(str::to_string);
     let name = crate::computer::appident::file_description(&path).or_else(|| {
-        file_name
-            .as_deref()
-            .map(|f| f.strip_suffix(".exe").or_else(|| f.strip_suffix(".EXE")).unwrap_or(f).to_string())
+        file_name.as_deref().map(|f| {
+            f.strip_suffix(".exe")
+                .or_else(|| f.strip_suffix(".EXE"))
+                .unwrap_or(f)
+                .to_string()
+        })
     });
 
     PickedExecutable {
@@ -1324,50 +1326,51 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
 
     let mut by_key: HashMap<String, LocalAppEntry> = HashMap::new();
 
-    let mut insert_app = |name: String, exe_name: Option<String>, path: Option<String>, running: bool| {
-        let name = name.trim().to_string();
-        if name.is_empty() || is_noise_display_name(&name) {
-            return;
-        }
-        if let Some(ref exe) = exe_name {
-            if is_noise_exe(exe) {
+    let mut insert_app =
+        |name: String, exe_name: Option<String>, path: Option<String>, running: bool| {
+            let name = name.trim().to_string();
+            if name.is_empty() || is_noise_display_name(&name) {
                 return;
             }
-        }
-        let identifier = exe_name
-            .clone()
-            .or_else(|| path.clone())
-            .unwrap_or_else(|| name.clone());
-        let key = exe_name
-            .as_deref()
-            .unwrap_or(&identifier)
-            .to_ascii_lowercase();
-        match by_key.get_mut(&key) {
-            Some(existing) => {
-                if running {
-                    existing.running = true;
-                }
-                if existing.path.is_none() && path.is_some() {
-                    existing.path = path;
-                }
-                if existing.exe_name.is_none() && exe_name.is_some() {
-                    existing.exe_name = exe_name;
+            if let Some(ref exe) = exe_name {
+                if is_noise_exe(exe) {
+                    return;
                 }
             }
-            None => {
-                by_key.insert(
-                    key,
-                    LocalAppEntry {
-                        name,
-                        identifier,
-                        exe_name,
-                        path,
-                        running,
-                    },
-                );
+            let identifier = exe_name
+                .clone()
+                .or_else(|| path.clone())
+                .unwrap_or_else(|| name.clone());
+            let key = exe_name
+                .as_deref()
+                .unwrap_or(&identifier)
+                .to_ascii_lowercase();
+            match by_key.get_mut(&key) {
+                Some(existing) => {
+                    if running {
+                        existing.running = true;
+                    }
+                    if existing.path.is_none() && path.is_some() {
+                        existing.path = path;
+                    }
+                    if existing.exe_name.is_none() && exe_name.is_some() {
+                        existing.exe_name = exe_name;
+                    }
+                }
+                None => {
+                    by_key.insert(
+                        key,
+                        LocalAppEntry {
+                            name,
+                            identifier,
+                            exe_name,
+                            path,
+                            running,
+                        },
+                    );
+                }
             }
-        }
-    };
+        };
 
     // 1. Currently running visible window applications
     unsafe extern "system" fn enum_wnd_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -1383,7 +1386,10 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
     }
     let mut pids = HashSet::<u32>::new();
     unsafe {
-        EnumWindows(Some(enum_wnd_proc), &mut pids as *mut HashSet<u32> as LPARAM);
+        EnumWindows(
+            Some(enum_wnd_proc),
+            &mut pids as *mut HashSet<u32> as LPARAM,
+        );
     }
     for pid in pids {
         if pid == std::process::id() {
@@ -1399,12 +1405,13 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
             if is_noise_exe(&file) {
                 continue;
             }
-            let name = crate::computer::appident::file_description(&img.path).unwrap_or_else(|| {
-                file.strip_suffix(".exe")
-                    .or_else(|| file.strip_suffix(".EXE"))
-                    .unwrap_or(&file)
-                    .to_string()
-            });
+            let name =
+                crate::computer::appident::file_description(&img.path).unwrap_or_else(|| {
+                    file.strip_suffix(".exe")
+                        .or_else(|| file.strip_suffix(".EXE"))
+                        .unwrap_or(&file)
+                        .to_string()
+                });
             insert_app(name, Some(file), Some(img.path), true);
         }
     }
@@ -1475,10 +1482,7 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
                                     .map(|p| p.to_string_lossy().to_string())
                             });
                         if let Some(path) = exe_path {
-                            let exe_name = path
-                                .rsplit(['\\', '/'])
-                                .next()
-                                .map(str::to_string);
+                            let exe_name = path.rsplit(['\\', '/']).next().map(str::to_string);
                             insert_app(display_name, exe_name, Some(path), false);
                         }
                     }
@@ -1537,16 +1541,14 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
                             .next()
                             .unwrap_or(&sub_name)
                             .to_string();
-                        let display =
-                            crate::computer::appident::file_description(&exe_path).unwrap_or_else(
-                                || {
-                                    exe_name
-                                        .strip_suffix(".exe")
-                                        .or_else(|| exe_name.strip_suffix(".EXE"))
-                                        .unwrap_or(&exe_name)
-                                        .to_string()
-                                },
-                            );
+                        let display = crate::computer::appident::file_description(&exe_path)
+                            .unwrap_or_else(|| {
+                                exe_name
+                                    .strip_suffix(".exe")
+                                    .or_else(|| exe_name.strip_suffix(".EXE"))
+                                    .unwrap_or(&exe_name)
+                                    .to_string()
+                            });
                         insert_app(display, Some(exe_name), Some(exe_path), false);
                     }
                 }
@@ -1572,7 +1574,10 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
 #[cfg(target_os = "macos")]
 fn list_local_apps() -> Vec<LocalAppEntry> {
     let mut out = Vec::new();
-    let mut dirs = vec![PathBuf::from("/Applications"), PathBuf::from("/System/Applications")];
+    let mut dirs = vec![
+        PathBuf::from("/Applications"),
+        PathBuf::from("/System/Applications"),
+    ];
     if let Some(home) = dirs::home_dir() {
         dirs.push(home.join("Applications"));
     }
@@ -1634,7 +1639,10 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
                         name = Some(v.trim().to_string());
                     }
                 } else if let Some(v) = line.strip_prefix("Exec=") {
-                    exec = v.split_whitespace().next().map(|s| s.trim_matches('"').to_string());
+                    exec = v
+                        .split_whitespace()
+                        .next()
+                        .map(|s| s.trim_matches('"').to_string());
                 } else if line.trim() == "NoDisplay=true" {
                     no_display = true;
                 }
@@ -1643,11 +1651,7 @@ fn list_local_apps() -> Vec<LocalAppEntry> {
                 continue;
             }
             if let (Some(name), Some(exec_cmd)) = (name, exec) {
-                let exe_name = exec_cmd
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&exec_cmd)
-                    .to_string();
+                let exe_name = exec_cmd.rsplit('/').next().unwrap_or(&exec_cmd).to_string();
                 out.push(LocalAppEntry {
                     name,
                     identifier: exe_name.clone(),
@@ -1691,4 +1695,3 @@ fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
             .map_err(|e| e.to_string())
     }
 }
-

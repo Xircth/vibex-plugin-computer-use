@@ -554,14 +554,9 @@ impl SelfIdentity {
         if app.pid == self.pid {
             return true;
         }
-        if app
-            .bundle_id
-            .as_deref()
-            .is_some_and(|b| {
-                b.eq_ignore_ascii_case(VIBEX_BUNDLE_ID)
-                    || b.eq_ignore_ascii_case(VIBEX_ALT_BUNDLE_ID)
-            })
-        {
+        if app.bundle_id.as_deref().is_some_and(|b| {
+            b.eq_ignore_ascii_case(VIBEX_BUNDLE_ID) || b.eq_ignore_ascii_case(VIBEX_ALT_BUNDLE_ID)
+        }) {
             return true;
         }
         let Some(path) = app.path.as_deref().filter(|s| !s.is_empty()) else {
@@ -999,7 +994,11 @@ mod tests {
             Err(NotGrantable::Unidentified)
         );
         assert_eq!(
-            grantable(&app(1, None, Some("/Applications/TextEdit.app")), &me, &list),
+            grantable(
+                &app(1, None, Some("/Applications/TextEdit.app")),
+                &me,
+                &list
+            ),
             Ok(())
         );
     }
